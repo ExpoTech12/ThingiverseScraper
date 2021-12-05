@@ -10,6 +10,9 @@
 import time
 import datetime
 import sqlite3
+import csv
+import numpy as np
+
 
 #
 # Configuration Data
@@ -161,6 +164,22 @@ database_connection = get_database_connection(sqlite_database_path)
 database_cursor = get_database_cursor(database_connection)
 
 thingiverse_url = 'https://www.thingiverse.com/thing:'
+
+##Read URLS from a list of URLS Text File to determine which docs to scrape.
+line_counter = 0
+with open("clone_list.csv","r") as thingiverse_url_file:
+    reader = csv.reader(thingiverse_url_file)
+    thingiverse_url_list = np.empty(len(list(reader)))
+    for row in reader:
+        print(row)
+        thingiverse_url_list[line_counter] = row
+        line_counter += 1
+print("Printing URL List")
+print(thingiverse_url_list[0])
+# print(thingiverse_url_list[1])
+# print(thingiverse_url_list[2])
+# print(thingiverse_url_list[3])
+
 
 if not thing_start_range:
     thing_start_range = get_last_page_number(database_connection, database_cursor, thingiverse_table_name)
