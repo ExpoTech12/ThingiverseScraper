@@ -6,7 +6,7 @@ import os
 #
 
 # Set download link to thingverse URL with zip link. Example: https://www.thingiverse.com/thing:1376314/zip
-download_link = 'https://www.thingiverse.com/thing:1376314/zip'
+download_link = 'https://www.thingiverse.com/thing:5110223/zip'
 
 # Set local directory to save file to
 local_directory = ''

@@ -10,9 +10,15 @@
 import time
 import datetime
 import sqlite3
-import csv
-import numpy as np
-
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.touch_actions import TouchActions
+from selenium.webdriver.firefox.options import Options
+import pandas as pd
+import os
 
 #
 # Configuration Data
@@ -144,73 +150,75 @@ def download_thingiverse_zip_file(files_directory, thing_id, thing_page_title, t
     import requests
 
     local_zip_file_path = files_directory + f'{thing_id}-{thing_page_title}.zip'
-    thingiverse_zip_file_url = thingiverse_url + f'{thing_id}/zip'
+    thingiverse_zip_file_url = thingiverse_url + f'{thing_id}/files'
+    thingiverse_description_url = thingiverse_url + thing_id
 
-    with requests.get(thingiverse_zip_file_url, stream=True) as f_remote_thingiverse_zip:
-        if f_remote_thingiverse_zip.status_code in http_success_status_codes:
-            with open(local_zip_file_path, 'wb') as f_local_thingiverse_zip:
-                for chunk in f_remote_thingiverse_zip.iter_content(chunk_size=remote_zip_buffer_size):
-                    f_local_thingiverse_zip.write(chunk)
-
-    print(f'Thing ID: {thing_id} downloaded...')
-
-#
-# Start Here
-#
-files_directory, html_directory = get_download_file_paths()
-
-sqlite_database_path = get_sqlite_database_path()
-database_connection = get_database_connection(sqlite_database_path)
-database_cursor = get_database_cursor(database_connection)
-
-thingiverse_url = 'https://www.thingiverse.com/thing:'
-
-##Read URLS from a list of URLS Text File to determine which docs to scrape.
-line_counter = 0
-with open("clone_list.csv","r") as thingiverse_url_file:
-    reader = csv.reader(thingiverse_url_file)
-    thingiverse_url_list = np.empty(len(list(reader)))
-    for row in reader:
-        print(row)
-        thingiverse_url_list[line_counter] = row
-        line_counter += 1
-print("Printing URL List")
-print(thingiverse_url_list[0])
-# print(thingiverse_url_list[1])
-# print(thingiverse_url_list[2])
-# print(thingiverse_url_list[3])
+    workingDir = os.path.abspath(os.getcwd()) + r'\files'
+    thingieDir = r"\ " + thing_page_title
+    workingDir = workingDir + thingieDir
 
 
-if not thing_start_range:
-    thing_start_range = get_last_page_number(database_connection, database_cursor, thingiverse_table_name)
+    options = Options()
+    options.headless = True
+    profile = webdriver.FirefoxProfile()
 
-    if thing_start_range:
-        thing_start_range += 1
-    else:
-        thing_start_range = 1
+    
+    profile.set_preference('browser.download.folderList', 2) # custom location
+    profile.set_preference('browser.download.manager.showWhenStarting', False)
+    profile.set_preference('browser.download.dir', workingDir)
+    profile.set_preference('browser.helperApps.neverAsk.saveToDisk', 'application/sla')
+    browser = webdriver.Firefox(profile,options=options)
+    # browser = webdriver.Firefox(profile)
+    # browser = webdriver.Chrome("C:\Program Files\Google\Chrome\Application\chrome.exe")
 
-for current_page in range(thing_start_range, thing_end_range):
-    thing_id = current_page
-    thing_timestamp = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+    #Get Description
+    browser.get(thingiverse_description_url)
+    description = browser.find_element_by_class_name('ThingPage__description--14TtH')
+    thing_description = description.text
 
-    thing_html, thing_page_title = check_if_valid_thingiverse_page_and_retrieve_html_and_page_title(thing_id, thingiverse_url, http_success_status_codes)
-    if not thing_html and not thing_page_title:
-        # Write empty page details to database and continue
-        insert_record_into_thingiverse_table(database_connection, database_cursor, thingiverse_table_name, None, thing_id, 'Blank Page', thing_timestamp)
-        continue
+    #Get Thingie STL File
+    browser.get(thingiverse_zip_file_url)
 
-    if len(thing_page_title) > page_title_max_size:
-        thing_page_title = thing_page_title[:page_title_max_size]
+    downloadables = browser.find_elements_by_class_name('ThingFile__download--2SUQd')
+    for download in downloadables:
+        download.click()
+    
 
-    # If thing URL is valid, write page HTML to ../html/ directory
-    with open(html_directory + f'{thing_id}-{thing_page_title}.txt', 'w') as f_html_file:
-        f_html_file.write(thing_html)
 
-    # Download Thing zip file
-    download_thingiverse_zip_file(files_directory, thing_id, thing_page_title, thingiverse_url, http_success_status_codes, remote_zip_buffer_size)
-    insert_record_into_thingiverse_table(database_connection, database_cursor, thingiverse_table_name, None, thing_id, thing_page_title, thing_timestamp)
 
-    time.sleep(delay_between_downloads_seconds)
+    browser.close()
+   
+   #Return Thing_Description
+    return thing_description
+    
+    # with requests.get(thingiverse_zip_file_url, stream=True) as f_remote_thingiverse_zip:
+    #     if f_remote_thingiverse_zip.status_code in http_success_status_codes:
+    #         print()
 
-close_database_cursor(database_cursor)
-close_database_connection(database_connection)
+
+    #         # with open(local_zip_file_path, 'wb') as f_local_thingiverse_zip:
+    #         #     print(f_local_thingiverse_zip)
+    #         #     for chunk in f_remote_thingiverse_zip.iter_content(chunk_size=remote_zip_buffer_size):
+    #         #         f_local_thingiverse_zip.write(chunk)
+
+    # print(f'Thing ID: {thing_page_title} downloaded...')
+    # markAsDownloadedInCSV(thing_id)
+def configureDescription(thing_description, thing_page_title,thingiverse_url,thing_id):
+    
+
+    title_details = thing_page_title.split(' by ',1)
+    workingDir = os.path.abspath(os.getcwd()) + r'\files' + r'\ ' + thing_page_title + r'\ ' + title_details[0] + '.txt'
+    author = title_details[1].split('-',1)
+    author = author[0]
+
+
+   
+
+    thingie_description = title_details[0] + '\n' + "Author: " + author + "\n\n" + "Description \n" + thing_description + '\n\n' + "Original URL: " + thingiverse_url + thing_id + '\n\n'
+
+
+    with open(workingDir,"w",newline='\n') as thingie_descriptor:
+        thingie_descriptor.write(thingie_description)
+    thingie_descriptor.close()
+    
+    
